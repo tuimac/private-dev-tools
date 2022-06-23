@@ -1,0 +1,83 @@
+version: '3.9'
+services:
+
+  # Database server
+  postgres:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: postgresql
+    hostname: postgresql
+    restart: always
+    pids_limit: 100
+    volumes:
+      - ./postgresql/data:/var/lib/postgresql/data
+      - ./postgresql/config:/etc/postgresql
+      - ./postgresql/wal_archive:/var/lib/postgresql/archive
+      - ./postgresql/logs:/var/log/postgresql
+      - ./postgresql/initdb:/docker-entrypoint-initdb.d
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c hba_file=/etc/postgresql/pg_hba.conf
+    environment:
+      - TZ
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB
+    networks:
+      dev-tool.local:
+
+  # Mattermost server
+  mattermost:
+    depends_on:
+      - postgres
+    image: mattermost/${MATTERMOST_IMAGE}:${MATTERMOST_VERSION}
+    container_name: mattermost
+    hostname: mattermost
+    restart: always
+    pids_limit: 200
+    volumes:
+      - ./mattermost/config:/mattermost/config
+      - ./mattermost/data:/mattermost/data
+      - ./mattermost/logs:/mattermost/logs
+      - ./mattermost/plugins:/mattermost/plugins
+      - ./mattermost/client/plugins:/mattermost/client/plugins
+      - ./mattermost/bleve-indexes:/mattermost/bleve-indexes
+    environment:
+      - TZ
+      - MM_SQLSETTINGS_DRIVERNAME
+      - MM_SQLSETTINGS_DATASOURCE
+      - MM_BLEVESETTINGS_INDEXDIR
+      - MM_SERVICESETTINGS_SITEURL
+    networks:
+      dev-tool.local:
+  
+  # Gitlab
+  gitlab:
+    image: gitlab-ee:${GITLAB_VERSION}
+    container_name: gitlab
+    hostname: gitlab
+    restart: always
+    pids_limit: 200
+    volume:
+      - 
+
+  # Reverse Proxy server
+  proxy:
+    depends_on:
+      - mattermost
+    image: nginx:${NGINX_VERSION}
+    container_name: nginx
+    hostname: nginx
+    restart: always
+    pids_limit: 100
+    environment:
+      - TZ
+    ports:
+      - ${HTTPS_PORT}:443
+    volumes:
+      - ./nginx/config/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/letsencrypt:/etc/letsencrypt
+      - ./nginx/logs:/var/log/nginx
+    networks:
+      dev-tool.local:
+
+networks:
+  dev-tool.local:
+    name: dev-tool.local
